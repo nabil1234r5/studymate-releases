@@ -1,0 +1,51 @@
+# Publishes a new StudyMate Android build as a release.
+#
+# GitHub's servers fetch the APK straight from Expo and attach it to a
+# new release, so nothing has to be downloaded or uploaded by hand.
+# The newest release is what the download links give people.
+#
+# To run it: Actions tab, "Publish APK", "Run workflow", then paste the
+# build's .apk address from Expo and a release name.
+name: Publish APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: "The build's .apk address from Expo (https://expo.dev/artifacts/eas/....apk)"
+        required: true
+      version:
+        description: "Release name, for example 1.0.0-build5"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the APK from Expo
+        env:
+          APK_URL: ${{ inputs.apk_url }}
+        run: |
+          # Only Expo build addresses are accepted.
+          case "$APK_URL" in
+            https://expo.dev/artifacts/eas/*.apk) ;;
+            *) echo "Not an Expo build address: $APK_URL"; exit 1 ;;
+          esac
+          curl --fail --location --retry 5 --output StudyMate.apk "$APK_URL"
+          ls -l StudyMate.apk
+          # An APK is a zip file with the app's manifest inside. Check it.
+          unzip -l StudyMate.apk AndroidManifest.xml
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v$VERSION" StudyMate.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "StudyMate $VERSION" \
+            --notes "Android app file. Download StudyMate.apk below and open it to install. To update, install it over the old one; your data stays." \
+            --latest
